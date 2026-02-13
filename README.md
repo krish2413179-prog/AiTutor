@@ -1,7 +1,5 @@
 <div align="center">
 
-  ![Sovereign Banner](https://via.placeholder.com/1200x400/050505/9945FF?text=SOVEREIGN+|+Decentralized+Neural+Interface)
-
   # 🧠 SOVEREIGN
 
   **Own Your Intelligence. Mint Your Mastery.**
@@ -16,7 +14,7 @@
     cryptographically hashed, anchored to the blockchain, and minted as a transferable NFT identity.
   </p>
 
-  [**View Demo**](#) · [**Report Bug**](issues) · [**Request Feature**](issues)
+  [**View Demo**](https://ai-tutor-mu-seven.vercel.app/) · [**Report Bug**](issues) · [**Request Feature**](issues)
 </div>
 
 ---
