@@ -1,6 +1,6 @@
 <div align="center">
 
-  # 🧠 SOVEREIGN
+  # 🧠 LEARN LEDGER
 
   **Own Your Intelligence. Mint Your Mastery.**
 
