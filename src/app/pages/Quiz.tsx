@@ -9,7 +9,7 @@ import { generateQuiz, evaluateQuiz, QuizQuestion, EvaluateQuizResponse } from '
 type QuizState = 'setup' | 'taking' | 'results';
 
 const Quiz: React.FC = () => {
-  const { connected } = useWallet();
+  const { connected, publicKey } = useWallet();
   const [quizState, setQuizState] = useState<QuizState>('setup');
   const [topic, setTopic] = useState('');
   const [numQuestions, setNumQuestions] = useState(5);
@@ -23,7 +23,8 @@ const Quiz: React.FC = () => {
 
     setIsLoading(true);
     try {
-      const response = await generateQuiz(topic, numQuestions);
+      const walletAddress = publicKey?.toBase58();
+      const response = await generateQuiz(topic, numQuestions, walletAddress);
       setQuiz(response.questions);
       setUserAnswers(new Array(response.questions.length).fill(''));
       setQuizState('taking');

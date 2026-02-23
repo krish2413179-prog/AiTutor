@@ -81,8 +81,16 @@ export const askQuestion = async (question: string): Promise<AskQuestionResponse
   return response.data;
 };
 
-export const generateQuiz = async (topic: string, num_questions: number = 5): Promise<GenerateQuizResponse> => {
-  const response = await api.post('/quiz', { topic, num_questions });
+export const generateQuiz = async (
+  topic: string, 
+  num_questions: number = 5, 
+  walletAddress?: string
+): Promise<GenerateQuizResponse> => {
+  const response = await api.post('/quiz', { 
+    topic, 
+    num_questions,
+    walletAddress 
+  });
   return response.data.data;
 };
 

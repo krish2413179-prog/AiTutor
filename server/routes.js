@@ -116,9 +116,8 @@ Provide a helpful answer based on what they've learned:`;
 
 /**
  * POST /api/quiz
- * Generate quiz questions with personalized learning flow
- * - NEW users (no wallet/no progress): Generate quiz on any topic
- * - EXISTING users (with completed modules): Only generate quiz from completed topics
+ * Generate quiz questions on ANY topic using AI's general knowledge
+ * ALWAYS generates quizzes on the exact topic the user enters
  */
 router.post('/quiz', async (req, res) => {
   try {
@@ -149,65 +148,23 @@ router.post('/quiz', async (req, res) => {
       numQuestions = num_questions;
     }
 
-    // Helper function to generate quiz from context
-    const generateQuiz = async (context) => {
-      const prompt = `You are an educational quiz generator. Based STRICTLY on the provided context, generate exactly ${numQuestions} conceptual multiple-choice questions.
+    // ALWAYS generate quiz using AI on the exact topic user requested
+    // Add timestamp to ensure variety in questions
+    const timestamp = Date.now();
+    const generalPrompt = `You are an educational quiz generator. Generate exactly ${numQuestions} UNIQUE and VARIED conceptual multiple-choice questions about "${topic}".
 
-Context:
-${context}
-
-Requirements:
-- Generate exactly ${numQuestions} questions (no more, no less)
-- Each question must have 4 options (A, B, C, D)
-- Mark the correct answer
-- Questions must be based ONLY on the provided context
-- Return ONLY valid JSON, no additional text
-
-Return format:
-{
-  "questions": [
-    {
-      "question": "Question text here?",
-      "options": ["A) Option 1", "B) Option 2", "C) Option 3", "D) Option 4"],
-      "correctAnswer": "A"
-    }
-  ]
-}
-
-Generate the quiz:`;
-
-      const result = await generativeModel.generateContent(prompt);
-      let responseText = result.response.text();
-
-      // Clean up response to extract JSON
-      responseText = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-
-      const quizData = JSON.parse(responseText);
-      return quizData.questions || [];
-    };
-
-    // NEW USER FLOW: No wallet address provided
-    if (!walletAddress || typeof walletAddress !== 'string' || walletAddress.trim() === '') {
-      const { context } = await ragPipeline(topic);
-
-      // If we have context from database, use it
-      if (context && context.trim() !== '') {
-        const questions = await generateQuiz(context);
-        return res.json({
-          success: true,
-          data: { questions }
-        });
-      }
-
-      // No context in database? Generate quiz using AI's general knowledge
-      const generalPrompt = `You are an educational quiz generator. Generate exactly ${numQuestions} conceptual multiple-choice questions about "${topic}".
+IMPORTANT: Generate DIFFERENT questions each time. Vary the difficulty, focus on different aspects of ${topic}, and ensure questions are diverse.
 
 Requirements:
 - Generate exactly ${numQuestions} questions (no more, no less)
 - Each question must have 4 options (A, B, C, D)
 - Mark the correct answer
 - Questions should test understanding of ${topic}
+- Cover DIFFERENT aspects and difficulty levels of ${topic}
+- Make questions varied and interesting
 - Return ONLY valid JSON, no additional text
+
+Context for variety: Request #${timestamp}
 
 Return format:
 {
@@ -222,159 +179,17 @@ Return format:
 
 Generate the quiz:`;
 
-      const result = await generativeModel.generateContent(generalPrompt);
-      let responseText = result.response.text();
-      responseText = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-      const quizData = JSON.parse(responseText);
-      
-      return res.json({
-        success: true,
-        data: {
-          questions: quizData.questions || []
-        }
-      });
-    }
-
-    // EXISTING USER FLOW: Check their progress
-    try {
-      const userProgress = await getUserProgress(walletAddress);
-      const completedModules = userProgress.filter(progress => progress.completed === true);
-      
-      // No completed modules yet? Generate quiz freely
-      if (completedModules.length === 0) {
-        const { context } = await ragPipeline(topic);
-
-        // If we have context from database, use it
-        if (context && context.trim() !== '') {
-          const questions = await generateQuiz(context);
-          return res.json({
-            success: true,
-            data: { questions }
-          });
-        }
-
-        // No context in database? Generate quiz using AI's general knowledge
-        const generalPrompt = `You are an educational quiz generator. Generate exactly ${numQuestions} conceptual multiple-choice questions about "${topic}".
-
-Requirements:
-- Generate exactly ${numQuestions} questions (no more, no less)
-- Each question must have 4 options (A, B, C, D)
-- Mark the correct answer
-- Questions should test understanding of ${topic}
-- Return ONLY valid JSON, no additional text
-
-Return format:
-{
-  "questions": [
-    {
-      "question": "Question text here?",
-      "options": ["A) Option 1", "B) Option 2", "C) Option 3", "D) Option 4"],
-      "correctAnswer": "A"
-    }
-  ]
-}
-
-Generate the quiz:`;
-
-        const result = await generativeModel.generateContent(generalPrompt);
-        let responseText = result.response.text();
-        responseText = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-        const quizData = JSON.parse(responseText);
-        
-        return res.json({
-          success: true,
-          data: {
-            questions: quizData.questions || []
-          }
-        });
+    const result = await generativeModel.generateContent(generalPrompt);
+    let responseText = result.response.text();
+    responseText = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    const quizData = JSON.parse(responseText);
+    
+    return res.json({
+      success: true,
+      data: {
+        questions: quizData.questions || []
       }
-
-      // User has completed modules - restrict to completed topics
-      const completedTopics = completedModules.map(module => module.topic);
-
-      // Try to find relevant context from completed topics
-      const { context } = await ragPipeline(topic, 0.5, 3, completedTopics);
-
-      if (!context || context.trim() === '') {
-        // No match in completed topics - check if topic exists in uncompleted modules
-        const allDocsResult = await ragPipeline(topic, 0.5, 1, null);
-        
-        if (allDocsResult.context && allDocsResult.context.trim() !== '') {
-          // Topic exists but not completed
-          return res.status(403).json({
-            success: false,
-            error: `You need to complete the ${topic} module first to take this quiz.`
-          });
-        }
-
-        // Topic doesn't exist at all
-        return res.json({
-          success: true,
-          data: {
-            questions: []
-          }
-        });
-      }
-
-      // Generate quiz based on completed topics
-      const questions = await generateQuiz(context);
-      res.json({
-        success: true,
-        data: {
-          questions
-        }
-      });
-
-    } catch (progressError) {
-      // User doesn't exist or error fetching progress - treat as new user
-      console.log('User progress not found, treating as new user:', progressError.message);
-      
-      const { context } = await ragPipeline(topic);
-
-      // If we have context from database, use it
-      if (context && context.trim() !== '') {
-        const questions = await generateQuiz(context);
-        return res.json({
-          success: true,
-          data: { questions }
-        });
-      }
-
-      // No context in database? Generate quiz using AI's general knowledge
-      const generalPrompt = `You are an educational quiz generator. Generate exactly ${numQuestions} conceptual multiple-choice questions about "${topic}".
-
-Requirements:
-- Generate exactly ${numQuestions} questions (no more, no less)
-- Each question must have 4 options (A, B, C, D)
-- Mark the correct answer
-- Questions should test understanding of ${topic}
-- Return ONLY valid JSON, no additional text
-
-Return format:
-{
-  "questions": [
-    {
-      "question": "Question text here?",
-      "options": ["A) Option 1", "B) Option 2", "C) Option 3", "D) Option 4"],
-      "correctAnswer": "A"
-    }
-  ]
-}
-
-Generate the quiz:`;
-
-      const result = await generativeModel.generateContent(generalPrompt);
-      let responseText = result.response.text();
-      responseText = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-      const quizData = JSON.parse(responseText);
-      
-      return res.json({
-        success: true,
-        data: {
-          questions: quizData.questions || []
-        }
-      });
-    }
+    });
 
   } catch (error) {
     console.error('Error in /api/quiz:', error);
